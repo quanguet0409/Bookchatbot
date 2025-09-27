@@ -6,656 +6,6 @@ import datetime
 import re
 from chatbot.bot import ChatBot
 
-class GUI:
-    def __init__(self):
-        self.chatbot = ChatBot()
-        self.root = tk.Tk()
-        self.message_queue = queue.Queue()
-        self.typing_animation_active = False
-        self.input_placeholder_active = False
-        
-        self.setup_window()
-        self.setup_colors()
-        self.setup_fonts()
-        self.create_ui()
-        self.process_queue()
-    
-    def setup_window(self):
-        self.root.title("BookStore - Hệ thống quản lý sách")
-        self.root.geometry("1200x800")
-        self.root.minsize(1000, 700)
-        
-        x = (self.root.winfo_screenwidth() // 2) - 600
-        y = (self.root.winfo_screenheight() // 2) - 400
-        self.root.geometry(f"1200x800+{x}+{y}")
-    
-    def setup_colors(self):
-        self.colors = {
-            'primary': '#2c3e50',
-            'secondary': '#3498db', 
-            'success': '#27ae60',
-            'warning': '#f39c12',
-            'danger': '#e74c3c',
-            'light': '#ecf0f1',
-            'white': '#ffffff',
-            'text': '#2c3e50',
-            'text_light': '#7f8c8d'
-        }
-        self.root.configure(bg=self.colors['light'])
-    
-    def setup_fonts(self):
-        self.fonts = {
-            'title': ('Segoe UI', 20, 'bold'),
-            'subtitle': ('Segoe UI', 12),
-            'chat': ('Segoe UI', 11),
-            'input': ('Segoe UI', 11),
-            'button': ('Segoe UI', 10, 'bold')
-        }
-    
-    def create_ui(self):
-        self.main_frame = tk.Frame(self.root, bg=self.colors['light'])
-        self.main_frame.pack(fill=tk.BOTH, expand=True)
-        
-        self.create_header()
-        self.create_chat_area()
-        self.create_input_area()
-        self.create_status_bar()
-        
-        self.add_welcome_message()
-    
-    def create_header(self):
-        header_frame = tk.Frame(self.main_frame, bg=self.colors['primary'], height=80)
-        header_frame.pack(fill=tk.X)
-        header_frame.pack_propagate(False)
-        
-        header_content = tk.Frame(header_frame, bg=self.colors['primary'])
-        header_content.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
-        
-        left_frame = tk.Frame(header_content, bg=self.colors['primary'])
-        left_frame.pack(side=tk.LEFT, fill=tk.Y)
-        
-        title_label = tk.Label(left_frame,
-                              text="BookStore",
-                              font=self.fonts['title'],
-                              bg=self.colors['primary'],
-                              fg=self.colors['white'])
-        title_label.pack(anchor='w')
-        
-        subtitle_label = tk.Label(left_frame,
-                                 text="Hệ thống tìm kiếm và đặt mua sách trực tuyến",
-                                 font=self.fonts['subtitle'],
-                                 bg=self.colors['primary'],
-                                 fg='#bdc3c7')
-        subtitle_label.pack(anchor='w')
-        
-        right_frame = tk.Frame(header_content, bg=self.colors['primary'])
-        right_frame.pack(side=tk.RIGHT, fill=tk.Y)
-        
-        # Action buttons frame
-        button_frame = tk.Frame(left_frame, bg=self.colors['primary'])
-        button_frame.pack(fill='x', pady=(10, 0))
-        
-        catalog_btn = tk.Button(button_frame,
-                               text="Danh mục sách",
-                               font=self.fonts['button'],
-                               bg=self.colors['secondary'],
-                               fg=self.colors['white'],
-                               relief='flat',
-                               command=self.show_catalog,
-                               cursor='hand2')
-        catalog_btn.pack(side='left', padx=(0, 5))
-        
-        orders_btn = tk.Button(button_frame,
-                              text="Đơn hàng",
-                              font=self.fonts['button'],
-                              bg=self.colors['secondary'],
-                              fg=self.colors['white'],
-                              relief='flat',
-                              command=self.show_orders,
-                              cursor='hand2')
-        orders_btn.pack(side='left', padx=5)
-        
-        help_btn = tk.Button(button_frame,
-                            text="Trợ giúp",
-                            font=self.fonts['button'],
-                            bg=self.colors['secondary'],
-                            fg=self.colors['white'],
-                            relief='flat',
-                            command=self.show_help,
-                            cursor='hand2')
-        help_btn.pack(side='left', padx=5)
-
-    def create_chat_area(self):
-        chat_frame = tk.Frame(self.main_frame, bg=self.colors['light'])
-        chat_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
-        
-        self.chat_display = scrolledtext.ScrolledText(
-            chat_frame,
-            wrap=tk.WORD,
-            font=self.fonts['chat'],
-            bg=self.colors['white'],
-            fg=self.colors['text'],
-            state=tk.DISABLED,
-            cursor='xterm'  # Change cursor to allow text selection
-        )
-        self.chat_display.pack(fill=tk.BOTH, expand=True)
-        
-        self.setup_text_tags()
-        self.chat_display.bind('<Button-3>', self.show_context_menu)
-        
-        # Enable text selection when disabled
-        self.chat_display.bind('<Button-1>', self.enable_selection)
-        self.chat_display.bind('<B1-Motion>', self.enable_selection)
-        self.chat_display.bind('<ButtonRelease-1>', self.enable_selection)
-
-    def setup_text_tags(self):
-        self.chat_display.tag_configure("user",
-                                       background='#e3f2fd',
-                                       foreground=self.colors['text'],
-                                       font=self.fonts['chat'],
-                                       lmargin1=20, lmargin2=20,
-                                       spacing1=5, spacing3=5)
-        
-        self.chat_display.tag_configure("bot",
-                                       background='#f8f9fa',
-                                       foreground=self.colors['text'],
-                                       font=self.fonts['chat'],
-                                       lmargin1=20, lmargin2=20,
-                                       spacing1=5, spacing3=5)
-        
-        self.chat_display.tag_configure("timestamp",
-                                       foreground=self.colors['text_light'],
-                                       font=('Segoe UI', 9))
-        
-        self.chat_display.tag_configure("book_id",
-                                       background='#fff3cd',
-                                       foreground=self.colors['warning'],
-                                       font=('Consolas', 10, 'bold'))
-
-    def create_input_area(self):
-        input_frame = tk.Frame(self.main_frame, bg=self.colors['light'])
-        input_frame.pack(fill=tk.X, padx=20, pady=(0, 10))
-        
-        # Quick purchase area
-        quick_frame = tk.Frame(input_frame, bg=self.colors['white'], relief=tk.SOLID, borderwidth=1)
-        quick_frame.pack(fill=tk.X, pady=(0, 10))
-        
-        quick_content = tk.Frame(quick_frame, bg=self.colors['white'])
-        quick_content.pack(fill=tk.X, padx=15, pady=10)
-        
-        tk.Label(quick_content,
-                text="⚡ Mua nhanh theo mã sách:",
-                font=('Segoe UI', 10, 'bold'),
-                bg=self.colors['white']).pack(side=tk.LEFT)
-        
-        self.quick_entry = tk.Entry(quick_content,
-                                   font=('Consolas', 10),
-                                   width=20)
-        self.quick_entry.pack(side=tk.LEFT, padx=(10, 5))
-        self.quick_entry.bind('<Return>', self.quick_buy)
-        
-        tk.Button(quick_content,
-                 text="🛒 Mua ngay",
-                 font=self.fonts['button'],
-                 bg=self.colors['success'],
-                 fg='white',
-                 relief=tk.FLAT,
-                 cursor='hand2',
-                 command=self.quick_buy).pack(side=tk.LEFT, padx=5)
-        
-        # Order check area
-        check_frame = tk.Frame(quick_content, bg=self.colors['white'])
-        check_frame.pack(side=tk.RIGHT)
-        
-        tk.Label(check_frame,
-                text="📋 Kiểm tra đơn hàng:",
-                font=('Segoe UI', 10, 'bold'),
-                bg=self.colors['white']).pack(side=tk.LEFT)
-        
-        self.order_entry = tk.Entry(check_frame,
-                                   font=('Consolas', 10),
-                                   width=15)
-        self.order_entry.pack(side=tk.LEFT, padx=(10, 5))
-        self.order_entry.bind('<Return>', self.check_order)
-        
-        tk.Button(check_frame,
-                 text="🔍 Kiểm tra",
-                 font=('Segoe UI', 9, 'bold'),
-                 bg=self.colors['secondary'],
-                 fg='white',
-                 relief=tk.FLAT,
-                 cursor='hand2',
-                 command=self.check_order).pack(side=tk.LEFT)
-        
-        # Main input area
-        main_input_frame = tk.Frame(input_frame, bg=self.colors['white'], relief=tk.SOLID, borderwidth=1)
-        main_input_frame.pack(fill=tk.X)
-        
-        input_content = tk.Frame(main_input_frame, bg=self.colors['white'])
-        input_content.pack(fill=tk.X, padx=15, pady=15)
-        
-        tk.Label(input_content,
-                text="💬 Nhập tin nhắn của bạn:",
-                font=('Segoe UI', 10, 'bold'),
-                bg=self.colors['white']).pack(anchor='w', pady=(0, 10))
-        
-        input_row = tk.Frame(input_content, bg=self.colors['white'])
-        input_row.pack(fill=tk.X)
-        
-        self.input_text = tk.Text(input_row,
-                                 height=3,
-                                 font=self.fonts['input'],
-                                 bg='#f8f9fa',
-                                 wrap=tk.WORD)
-        self.input_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
-        
-        button_frame = tk.Frame(input_row, bg=self.colors['white'])
-        button_frame.pack(side=tk.RIGHT, fill=tk.Y)
-        
-        self.send_button = tk.Button(button_frame,
-                                    text="Gửi",
-                                    font=self.fonts['button'],
-                                    bg=self.colors['secondary'],
-                                    fg='white',
-                                    relief=tk.FLAT,
-                                    cursor='hand2',
-                                    width=8,
-                                    command=self.send_message)
-        self.send_button.pack(fill=tk.Y, pady=2)
-        
-        clear_btn = tk.Button(button_frame,
-                             text="🗑️",
-                             font=('Segoe UI', 10),
-                             bg=self.colors['danger'],
-                             fg='white',
-                             relief=tk.FLAT,
-                             cursor='hand2',
-                             width=8,
-                             command=self.clear_chat)
-        clear_btn.pack(fill=tk.X, pady=2)
-        
-        self.input_text.bind('<Return>', self.handle_enter)
-        self.input_text.bind('<Shift-Return>', lambda e: None)
-        self.input_text.bind('<KeyRelease>', self.on_typing)
-        
-        self.add_placeholder()
-
-    def create_status_bar(self):
-        self.status_frame = tk.Frame(self.main_frame, bg=self.colors['primary'], height=30)
-        self.status_frame.pack(fill=tk.X, side=tk.BOTTOM)
-        self.status_frame.pack_propagate(False)
-        
-        self.status_label = tk.Label(self.status_frame,
-                                   text="✅ Sẵn sàng | Nhấn Enter để gửi tin nhắn",
-                                   font=('Segoe UI', 9),
-                                   bg=self.colors['primary'],
-                                   fg='#bdc3c7',
-                                   anchor='w')
-        self.status_label.pack(side=tk.LEFT, padx=15, pady=5)
-        
-        online_label = tk.Label(self.status_frame,
-                              text="🟢 Online | 🔗 Google Books API",
-                              font=('Segoe UI', 9),
-                              bg=self.colors['primary'],
-                              fg=self.colors['success'])
-        online_label.pack(side=tk.RIGHT, padx=15, pady=5)
-
-    def add_placeholder(self):
-        placeholder = """💡 Ví dụ các câu hỏi bạn có thể hỏi:
-
-• "Tìm sách lập trình Python"
-• "Mua sách Đắc Nhân Tâm"
-• "Sách về kinh doanh" 
-• "Kiểm tra đơn hàng ORD000001"
-
-⌨️ Nhấn Enter để gửi, Shift+Enter để xuống dòng"""
-        
-        self.input_text.insert('1.0', placeholder)
-        self.input_text.configure(fg=self.colors['text_light'])
-        self.input_placeholder_active = True
-        
-        self.input_text.bind('<FocusIn>', self.on_focus_in)
-        self.input_text.bind('<FocusOut>', self.on_focus_out)
-
-    def on_focus_in(self, event):
-        if self.input_placeholder_active:
-            self.input_text.delete('1.0', tk.END)
-            self.input_text.configure(fg=self.colors['text'])
-            self.input_placeholder_active = False
-    
-    def on_focus_out(self, event):
-        if not self.input_text.get('1.0', tk.END).strip():
-            self.add_placeholder()
-
-    def handle_enter(self, event):
-        self.send_message()
-        return 'break'
-
-    def on_typing(self, event):
-        if event.keysym == 'Return':
-            return
-        
-        text = self.input_text.get('1.0', tk.END).strip()
-        if text and not self.input_placeholder_active:
-            self.send_button.configure(bg=self.colors['success'])
-            self.status_label.configure(text="⌨️ Đang nhập...")
-        else:
-            self.send_button.configure(bg=self.colors['secondary'])
-            self.status_label.configure(text="✅ Sẵn sàng | Nhấn Enter để gửi tin nhắn")
-
-    def add_welcome_message(self):
-        welcome = """🌟 Chào mừng bạn đến với BookStore AI Chatbot! 🌟
-
-Tôi là trợ lý thông minh với API Google Books, sẵn sàng giúp bạn:
-
-📚 **Tìm kiếm sách:** Từ hàng triệu đầu sách trên thế giới
-🛒 **Đặt mua sách:** Quy trình đơn giản, thanh toán linh hoạt
-📋 **Theo dõi đơn hàng:** Kiểm tra trạng thái real-time
-💬 **Tư vấn chuyên nghiệp:** Gợi ý sách phù hợp với sở thích
-
-🚀 **Tính năng nổi bật:**
-• Tra cứu sách online qua Google Books API
-• Mua nhanh theo mã sách
-• Kiểm tra đơn hàng nhanh chóng
-• Danh mục sách đầy đủ với copy dễ dàng
-• Hỗ trợ đặt hàng từ A-Z
-
-💡 Hãy bắt đầu bằng cách nhập câu hỏi hoặc sử dụng các chức năng phía trên!"""
-        
-        self.add_bot_message(welcome)
-
-    def add_user_message(self, message):
-        self.chat_display.configure(state=tk.NORMAL)
-        timestamp = datetime.datetime.now().strftime("%H:%M")
-        
-        self.chat_display.insert(tk.END, f"\n👤 Bạn ({timestamp})\n", "timestamp")
-        self.chat_display.insert(tk.END, f"{message}\n", "user")
-        
-        self.chat_display.configure(state=tk.DISABLED)
-        self.chat_display.see(tk.END)
-
-    def add_bot_message(self, message):
-        self.chat_display.configure(state=tk.NORMAL)
-        timestamp = datetime.datetime.now().strftime("%H:%M")
-        
-        self.chat_display.insert(tk.END, f"\n🤖 BookStore AI ({timestamp})\n", "timestamp")
-        
-        lines = message.split('\n')
-        for line in lines:
-            if '🆔' in line and re.search(r'[A-Za-z0-9_-]{8,}', line):
-                parts = re.split(r'([A-Za-z0-9_-]{8,})', line)
-                for part in parts:
-                    if re.match(r'^[A-Za-z0-9_-]{8,}$', part):
-                        self.chat_display.insert(tk.END, part, "book_id")
-                    else:
-                        self.chat_display.insert(tk.END, part, "bot")
-                self.chat_display.insert(tk.END, '\n', "bot")
-            else:
-                self.chat_display.insert(tk.END, line + '\n', "bot")
-        
-        self.chat_display.configure(state=tk.DISABLED)
-        self.chat_display.see(tk.END)
-
-    def send_message(self, event=None):
-        user_input = self.input_text.get('1.0', tk.END).strip()
-        
-        if not user_input or self.input_placeholder_active:
-            return
-        
-        self.add_user_message(user_input)
-        
-        self.input_text.delete('1.0', tk.END)
-        self.input_text.configure(fg=self.colors['text'])
-        self.input_placeholder_active = False
-        
-        self.status_label.configure(text="🔄 Đang xử lý...")
-        self.send_button.configure(state='disabled')
-        
-        if user_input.lower() in ['quit', 'exit', 'thoát']:
-            self.add_bot_message("👋 Cảm ơn bạn đã sử dụng BookStore! Hẹn gặp lại! 🌟")
-            self.root.after(2000, self.root.quit)
-            return
-        
-        threading.Thread(target=self.process_message, args=(user_input,), daemon=True).start()
-
-    def process_message(self, user_input):
-        try:
-            response = self.chatbot.process_message(user_input)
-            self.message_queue.put(("response", response))
-        except Exception as e:
-            error_msg = f"❌ Có lỗi xảy ra: {str(e)}\nVui lòng thử lại!"
-            self.message_queue.put(("response", error_msg))
-
-    def process_queue(self):
-        if not hasattr(self, 'root') or not self.root.winfo_exists():
-            return
-            
-        try:
-            while True:
-                msg_type, data = self.message_queue.get_nowait()
-                if msg_type == "response":
-                    self.show_response(data)
-        except queue.Empty:
-            pass
-        except Exception as e:
-            print(f"Queue processing error: {e}")
-        
-        try:
-            self.root.after(100, self.process_queue)
-        except tk.TclError:
-            pass
-
-    def show_response(self, response):
-        self.add_bot_message(response)
-        self.status_label.configure(text="✅ Sẵn sàng | Nhấn Enter để gửi tin nhắn")
-        self.send_button.configure(state='normal', bg=self.colors['secondary'])
-        self.input_text.focus_set()
-
-    def quick_buy(self, event=None):
-        book_id = self.quick_entry.get().strip()
-        if book_id:
-            if self.input_placeholder_active:
-                self.input_text.delete('1.0', tk.END)
-                self.input_placeholder_active = False
-            else:
-                self.input_text.delete('1.0', tk.END)
-                
-            self.input_text.insert('1.0', f"mua {book_id}")
-            self.input_text.configure(fg=self.colors['text'])
-            self.quick_entry.delete(0, tk.END)
-            
-            self.status_label.configure(text=f"⚡ Mua nhanh: {book_id}")
-            self.send_message()
-            
-            self.root.after(3000, lambda: self.status_label.configure(text="✅ Sẵn sàng | Nhấn Enter để gửi tin nhắn"))
-
-    def check_order(self, event=None):
-        order_id = self.order_entry.get().strip()
-        if order_id:
-            if self.input_placeholder_active:
-                self.input_text.delete('1.0', tk.END)
-                self.input_placeholder_active = False
-            else:
-                self.input_text.delete('1.0', tk.END)
-                
-            self.input_text.insert('1.0', f"kiểm tra đơn hàng {order_id}")
-            self.input_text.configure(fg=self.colors['text'])
-            self.order_entry.delete(0, tk.END)
-            
-            self.status_label.configure(text=f"🔍 Kiểm tra đơn: {order_id}")
-            self.send_message()
-            
-            self.root.after(3000, lambda: self.status_label.configure(text="✅ Sẵn sàng | Nhấn Enter để gửi tin nhắn"))
-
-    def clear_chat(self):
-        """Clear chat conversation"""
-        if messagebox.askyesno("Xác nhận", "🗑️ Bạn có chắc muốn xóa toàn bộ cuộc trò chuyện?"):
-            self.chat_display.configure(state=tk.NORMAL)
-            self.chat_display.delete('1.0', tk.END)
-            self.chat_display.configure(state=tk.DISABLED)
-            self.add_welcome_message()
-
-    def enable_selection(self, event=None):
-        """Enable text selection in chat display"""
-        try:
-            self.chat_display.configure(state=tk.NORMAL)
-            self.root.after_idle(lambda: self.chat_display.configure(state=tk.DISABLED))
-        except:
-            pass
-
-    def copy_selected_text(self, event=None):
-        """Copy selected text to clipboard with better handling"""
-        try:
-            # Try to get selection first
-            try:
-                selected = self.chat_display.selection_get()
-                if selected:
-                    self.root.clipboard_clear()
-                    self.root.clipboard_append(selected)
-                    self.status_label.configure(text="📋 Đã sao chép text được chọn!")
-                    self.root.after(2000, lambda: self.status_label.configure(text="✅ Sẵn sàng"))
-                    return
-            except tk.TclError:
-                pass
-            
-            # If no selection, try to copy from cursor position
-            try:
-                # Get current cursor position
-                cursor_pos = self.chat_display.index(tk.INSERT)
-                # Get the line containing cursor
-                line_start = cursor_pos.split('.')[0] + '.0'
-                line_end = cursor_pos.split('.')[0] + '.end'
-                line_text = self.chat_display.get(line_start, line_end)
-                
-                if line_text.strip():
-                    self.root.clipboard_clear()
-                    self.root.clipboard_append(line_text.strip())
-                    self.status_label.configure(text="📋 Đã sao chép dòng hiện tại!")
-                    self.root.after(2000, lambda: self.status_label.configure(text="✅ Sẵn sàng"))
-                    return
-            except:
-                pass
-            
-            # Fallback: copy all chat
-            chat_content = self.chat_display.get('1.0', tk.END)
-            self.root.clipboard_clear()
-            self.root.clipboard_append(chat_content)
-            self.status_label.configure(text="📋 Đã sao chép toàn bộ chat!")
-            self.root.after(2000, lambda: self.status_label.configure(text="✅ Sẵn sàng"))
-            
-        except Exception as e:
-            print(f"Copy error: {e}")
-
-    def show_context_menu(self, event):
-        try:
-            context_menu = tk.Menu(self.root, tearoff=0)
-            
-            # Check if there's a selection
-            try:
-                selected = self.chat_display.selection_get()
-                if selected:
-                    context_menu.add_command(label="📋 Sao chép text được chọn", 
-                                           command=self.copy_selected_text)
-                    context_menu.add_separator()
-            except tk.TclError:
-                pass
-            
-            context_menu.add_command(label="📋 Sao chép tất cả", 
-                                   command=self.copy_all_chat)
-            context_menu.add_command(label="📚 Sao chép mã sách", 
-                                   command=self.copy_book_ids)
-            context_menu.add_separator()
-            context_menu.add_command(label="🔍 Danh mục sách", 
-                                   command=self.open_catalog)
-            context_menu.add_separator()
-            context_menu.add_command(label="🔄 Làm mới", 
-                                   command=self.refresh_chat)
-            
-            context_menu.tk_popup(event.x_root, event.y_root)
-        except Exception as e:
-            print(f"Context menu error: {e}")
-
-    def copy_all_chat(self):
-        """Copy entire chat content"""
-        try:
-            chat_content = self.chat_display.get('1.0', tk.END)
-            self.root.clipboard_clear()
-            self.root.clipboard_append(chat_content)
-            self.status_label.configure(text="📋 Đã sao chép toàn bộ cuộc trò chuyện!")
-            self.root.after(2000, lambda: self.status_label.configure(text="✅ Sẵn sàng"))
-        except Exception as e:
-            print(f"Copy all error: {e}")
-
-    def refresh_chat(self):
-        """Refresh chat display"""
-        try:
-            self.chat_display.configure(state=tk.NORMAL)
-            self.root.after(100, lambda: self.chat_display.configure(state=tk.DISABLED))
-            self.status_label.configure(text="🔄 Đã làm mới chat display")
-            self.root.after(2000, lambda: self.status_label.configure(text="✅ Sẵn sàng"))
-        except Exception as e:
-            print(f"Refresh error: {e}")
-
-    def open_catalog(self):
-        """Open book catalog window"""
-        BookCatalogWindow(self.root, self.chatbot.bookstore)
-
-    def show_help(self):
-        """Show help message"""
-        help_msg = """🆘 **HƯỚNG DẪN SỬ DỤNG BOOKSTORE CHATBOT**
-
-🔍 **TÌM KIẾM SÁCH:**
-• "tìm [từ khóa]" - Tìm theo tên, tác giả
-• "sách về [chủ đề]" - Tìm theo thể loại
-
-🛒 **ĐẶT MUA SÁCH:**
-• "mua [tên sách]" - Đặt mua bằng tên
-• "mua [ID sách]" - Đặt mua bằng mã sách
-• Dùng ô "Mua nhanh" ở trên
-
-📋 **KIỂM TRA ĐƠN HÀNG:**
-• "kiểm tra đơn hàng [mã]" - Kiểm tra trạng thái
-• "đơn hàng [mã]" - Xem thông tin đơn hàng
-• Dùng ô "Kiểm tra đơn hàng" ở trên
-
-💡 **TÍNH NĂNG KHÁC:**
-• Click phải để mở menu copy
-• "Danh mục sách" để duyệt toàn bộ
-• Shift+Enter để xuống dòng
-
-📞 **HỖ TRỢ:** Hotline 1900-xxxx (24/7)"""
-        
-        self.add_bot_message(help_msg)
-
-    def copy_book_ids(self):
-        """Copy all book IDs from chat"""
-        try:
-            chat_content = self.chat_display.get('1.0', tk.END)
-            book_ids = re.findall(r'([A-Za-z0-9_-]{8,})', chat_content)
-            if book_ids:
-                unique_ids = list(set(book_ids))
-                ids_text = '\n'.join(unique_ids)
-                self.root.clipboard_clear()
-                self.root.clipboard_append(ids_text)
-                self.status_label.configure(text=f"📋 Đã sao chép {len(unique_ids)} mã sách!")
-                self.root.after(2000, lambda: self.status_label.configure(text="✅ Sẵn sàng"))
-        except:
-            pass
-
-    def run(self):
-        """Run the GUI application"""
-        try:
-            self.root.mainloop()
-        except Exception as e:
-            print(f"GUI Error: {e}")
-        finally:
-            try:
-                if hasattr(self, 'root'):
-                    self.root.quit()
-                    self.root.destroy()
-            except:
-                pass
-
 class BookCatalogWindow:
     def __init__(self, parent, bookstore):
         self.parent = parent
@@ -664,7 +14,7 @@ class BookCatalogWindow:
         self.setup_catalog()
     
     def setup_catalog(self):
-        self.window.title("📚 Danh Mục Sách BookStore")
+        self.window.title("Danh Mục Sách BookStore")
         self.window.geometry("900x600")
         self.window.configure(bg='#f8f9fa')
         
@@ -673,7 +23,7 @@ class BookCatalogWindow:
         header.pack_propagate(False)
         
         tk.Label(header,
-                text="📚 DANH MỤC SÁCH BOOKSTORE",
+                text="DANH MỤC SÁCH BOOKSTORE",
                 font=('Segoe UI', 16, 'bold'),
                 bg='#2c3e50',
                 fg='white').pack(pady=15)
@@ -686,17 +36,17 @@ class BookCatalogWindow:
         left_frame.pack_propagate(False)
         
         tk.Label(left_frame,
-                text="📂 DANH MỤC",
+                text="DANH MỤC",
                 font=('Segoe UI', 12, 'bold'),
                 bg='white').pack(pady=10)
         
         categories = [
-            ("🔤 Tất cả sách", ""),
-            ("💼 Kinh doanh", "business"),
-            ("💻 Lập trình", "programming"),
-            ("📖 Văn học", "literature"),
-            ("🧠 Kỹ năng sống", "self help"),
-            ("🤖 AI & Công nghệ", "artificial intelligence")
+            ("Tất cả sách", ""),
+            ("Kinh doanh", "business"),
+            ("Lập trình", "programming"),
+            ("Văn học", "literature"),
+            ("Kỹ năng sống", "self help"),
+            ("Công nghệ", "technology")
         ]
         
         for cat_name, cat_query in categories:
@@ -718,7 +68,7 @@ class BookCatalogWindow:
         search_frame.pack(fill=tk.X, padx=10, pady=10)
         
         tk.Label(search_frame,
-                text="🔍 Tìm kiếm:",
+                text="Tìm kiếm:",
                 bg='white').pack(side=tk.LEFT)
         
         self.search_entry = tk.Entry(search_frame, font=('Segoe UI', 10))
@@ -732,10 +82,10 @@ class BookCatalogWindow:
         self.tree = ttk.Treeview(list_frame, columns=columns, show='headings')
         
         self.tree.heading('ID', text='Mã sách')
-        self.tree.heading('Tên sách', text='📚 Tên sách')
-        self.tree.heading('Tác giả', text='👤 Tác giả')
-        self.tree.heading('Giá', text='💰 Giá')
-        self.tree.heading('Đánh giá', text='⭐ Đánh giá')
+        self.tree.heading('Tên sách', text='Tên sách')
+        self.tree.heading('Tác giả', text='Tác giả')
+        self.tree.heading('Giá', text='Giá')
+        self.tree.heading('Đánh giá', text='Đánh giá')
         
         self.tree.column('ID', width=80)
         self.tree.column('Tên sách', width=300)
@@ -755,25 +105,18 @@ class BookCatalogWindow:
         btn_frame.pack(fill=tk.X, padx=10, pady=10)
         
         tk.Button(btn_frame,
-                 text="📋 Copy mã",
+                 text="Copy mã",
                  bg='#3498db',
                  fg='white',
                  relief=tk.FLAT,
                  command=self.copy_selected).pack(side=tk.LEFT, padx=(0, 5))
         
         tk.Button(btn_frame,
-                 text="🛒 Mua ngay",
+                 text="Mua ngay",
                  bg='#27ae60',
                  fg='white',
                  relief=tk.FLAT,
                  command=self.buy_selected).pack(side=tk.LEFT, padx=(0, 5))
-        
-        tk.Button(btn_frame,
-                 text="ℹ️ Chi tiết",
-                 bg='#f39c12',
-                 fg='white',
-                 relief=tk.FLAT,
-                 command=self.show_details).pack(side=tk.LEFT)
         
         self.load_category("")
     
@@ -824,29 +167,568 @@ class BookCatalogWindow:
             self.window.clipboard_clear()
             self.window.clipboard_append(f"mua {book_id}")
             messagebox.showinfo("Mua hàng", f"Đã copy 'mua {book_id}' vào clipboard!\n\nDán vào chat để mua sách:\n{book_title}")
+
+class GUI:
+    def __init__(self):
+        self.chatbot = ChatBot()
+        self.root = tk.Tk()
+        self.message_queue = queue.Queue()
+        self.typing_animation_active = False
+        self.input_placeholder_active = False
+        self.user_has_chatted = False  # Track if user has started chatting
+        
+        self.setup_window()
+        self.setup_colors()
+        self.setup_fonts()
+        self.create_ui()
+        self.process_queue()
     
-    def show_details(self):
-        selection = self.tree.selection()
-        if selection:
-            book_id = self.tree.item(selection[0])['values'][0]
-            book = self.bookstore.get_book_by_id(book_id)
-            if book:
-                details = f"""📚 CHI TIẾT SÁCH
+    def setup_window(self):
+        self.root.title("BookStore - Hệ thống quản lý sách")
+        self.root.geometry("1200x800")
+        self.root.minsize(1000, 700)
+        
+        x = (self.root.winfo_screenwidth() // 2) - 600
+        y = (self.root.winfo_screenheight() // 2) - 400
+        self.root.geometry(f"1200x800+{x}+{y}")
+    
+    def setup_colors(self):
+        self.colors = {
+            'primary': '#1a1a1a',      # Dark black
+            'secondary': '#8b5cf6',     # Purple accent
+            'success': '#10b981',       # Green
+            'warning': '#f59e0b',       # Orange
+            'danger': '#ef4444',        # Red
+            'background': '#0f0f0f',    # Very dark background
+            'card': '#1e1e1e',         # Dark cards
+            'light': '#2a2a2a',        # Light dark
+            'white': '#ffffff',        # White
+            'text': '#ffffff',         # White text
+            'text_light': '#9ca3af'    # Gray text
+        }
+        self.root.configure(bg=self.colors['background'])
+    
+    def setup_fonts(self):
+        self.fonts = {
+            'title': ('Segoe UI', 20, 'bold'),
+            'subtitle': ('Segoe UI', 12),
+            'chat': ('Segoe UI', 11),
+            'input': ('Segoe UI', 11),
+            'button': ('Segoe UI', 10, 'bold')
+        }
+    
+    def create_ui(self):
+        self.main_frame = tk.Frame(self.root, bg=self.colors['background'])
+        self.main_frame.pack(fill=tk.BOTH, expand=True)
+        
+        self.create_header()
+        self.create_chat_area()
+        self.create_input_area()
+        self.create_status_bar()
+        
+        self.add_welcome_message()
+    
+    def create_header(self):
+        header_frame = tk.Frame(self.main_frame, bg=self.colors['primary'], height=80)
+        header_frame.pack(fill=tk.X)
+        header_frame.pack_propagate(False)
+        
+        header_content = tk.Frame(header_frame, bg=self.colors['primary'])
+        header_content.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+        
+        left_frame = tk.Frame(header_content, bg=self.colors['primary'])
+        left_frame.pack(side=tk.LEFT, fill=tk.Y)
+        
+        title_label = tk.Label(left_frame,
+                              text="BookStore",
+                              font=self.fonts['title'],
+                              bg=self.colors['primary'],
+                              fg=self.colors['white'])
+        title_label.pack(anchor='w')
+        
+        subtitle_label = tk.Label(left_frame,
+                                 text="Hệ thống tìm kiếm và quản lý sách",
+                                 font=self.fonts['subtitle'],
+                                 bg=self.colors['primary'],
+                                 fg=self.colors['text_light'])
+        subtitle_label.pack(anchor='w')
+        
+        right_frame = tk.Frame(header_content, bg=self.colors['primary'])
+        right_frame.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        button_frame = tk.Frame(right_frame, bg=self.colors['primary'])
+        button_frame.pack(fill='both', expand=True)
+        
+        catalog_btn = tk.Button(button_frame,
+                               text="Danh mục",
+                               font=self.fonts['button'],
+                               bg=self.colors['secondary'],
+                               fg=self.colors['white'],
+                               relief='flat',
+                               command=self.show_catalog,
+                               cursor='hand2',
+                               padx=10, pady=5)
+        catalog_btn.pack(side='left', padx=5)
+        
+        help_btn = tk.Button(button_frame,
+                            text="Trợ giúp",
+                            font=self.fonts['button'],
+                            bg=self.colors['secondary'],
+                            fg=self.colors['white'],
+                            relief='flat',
+                            command=self.show_help,
+                            cursor='hand2',
+                            padx=10, pady=5)
+        help_btn.pack(side='left', padx=5)
+        
+        clear_btn = tk.Button(button_frame,
+                             text="Xóa chat",
+                             font=self.fonts['button'],
+                             bg=self.colors['warning'],
+                             fg=self.colors['white'],
+                             relief='flat',
+                             command=self.clear_chat,
+                             cursor='hand2',
+                             padx=10, pady=5)
+        clear_btn.pack(side='left', padx=5)
 
-🆔 Mã: {book.get('book_id', 'N/A')}
-📖 Tên: {book.get('title', 'N/A')}
-👤 Tác giả: {book.get('authors', 'N/A')}
-🏢 NXB: {book.get('publisher', 'N/A')}
-📅 Năm XB: {book.get('published_date', 'N/A')}
-📄 Số trang: {book.get('page_count', 'N/A')}
-📂 Thể loại: {book.get('categories', 'N/A')}
-💰 Giá: {book.get('price', 0):,}đ
-⭐ Đánh giá: {book.get('rating', 0)}/5
-📦 Tồn kho: {book.get('stock', 0)} cuốn
+    def create_chat_area(self):
+        chat_frame = tk.Frame(self.main_frame, bg=self.colors['background'])
+        chat_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+        
+        self.chat_display = scrolledtext.ScrolledText(
+            chat_frame,
+            wrap=tk.WORD,
+            font=self.fonts['chat'],
+            bg=self.colors['card'],
+            fg=self.colors['text'],
+            state=tk.NORMAL,
+            cursor='xterm',
+            selectbackground=self.colors['secondary'],
+            selectforeground=self.colors['white']
+        )
+        self.chat_display.pack(fill=tk.BOTH, expand=True)
+        
+        # Block editing but allow selection
+        self.chat_display.bind('<KeyPress>', self.on_chat_keypress)
+        self.chat_display.bind('<Control-c>', self.copy_selection)
+        self.chat_display.bind('<Control-a>', self.select_all)
+        
+        self.setup_text_tags()
+        self.chat_display.focus_set()
+    
+    def on_chat_keypress(self, event):
+        if event.state & 0x4:  # Ctrl pressed
+            if event.keysym in ['c', 'C', 'a', 'A']:
+                return None
+        return 'break'
+    
+    def copy_selection(self, event=None):
+        try:
+            if self.chat_display.tag_ranges(tk.SEL):
+                selected_text = self.chat_display.selection_get()
+                self.root.clipboard_clear()
+                self.root.clipboard_append(selected_text)
+                self.status_label.configure(text="Đã copy text được chọn!")
+                self.root.after(2000, lambda: self.status_label.configure(text="Sẵn sàng"))
+        except tk.TclError:
+            pass
+        return 'break'
+    
+    def select_all(self, event=None):
+        self.chat_display.tag_add(tk.SEL, "1.0", tk.END)
+        return 'break'
 
-📝 Mô tả:
-{book.get('description', 'Không có mô tả')[:300]}..."""
-                
-                messagebox.showinfo("Chi tiết sách", details)
-            else:
-                messagebox.showerror("Lỗi", "Không tìm thấy thông tin sách!")
+    def setup_text_tags(self):
+        self.chat_display.tag_configure("user",
+                                       background='#374151',
+                                       foreground=self.colors['text'],
+                                       font=self.fonts['chat'],
+                                       lmargin1=20, lmargin2=20,
+                                       spacing1=5, spacing3=5)
+        
+        self.chat_display.tag_configure("bot",
+                                       background='#1f2937',
+                                       foreground=self.colors['text'],
+                                       font=self.fonts['chat'],
+                                       lmargin1=20, lmargin2=20,
+                                       spacing1=5, spacing3=5)
+        
+        self.chat_display.tag_configure("timestamp",
+                                       foreground=self.colors['text_light'],
+                                       font=('Segoe UI', 9))
+
+    def create_input_area(self):
+        input_frame = tk.Frame(self.main_frame, bg=self.colors['background'])
+        input_frame.pack(fill=tk.X, padx=20, pady=(0, 10))
+        
+        # Quick actions
+        quick_frame = tk.Frame(input_frame, bg=self.colors['card'], relief=tk.SOLID, borderwidth=1)
+        quick_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        quick_content = tk.Frame(quick_frame, bg=self.colors['card'])
+        quick_content.pack(fill=tk.X, padx=15, pady=10)
+        
+        tk.Label(quick_content,
+                text="Mua nhanh theo mã sách:",
+                font=self.fonts['button'],
+                fg=self.colors['text'],
+                bg=self.colors['card']).pack(side=tk.LEFT)
+        
+        self.quick_entry = tk.Entry(quick_content,
+                                   font=('Consolas', 10),
+                                   bg=self.colors['background'],
+                                   fg=self.colors['text'],
+                                   insertbackground=self.colors['text'],
+                                   width=20)
+        self.quick_entry.pack(side=tk.LEFT, padx=(10, 5))
+        self.quick_entry.bind('<Return>', self.quick_buy)
+        
+        tk.Button(quick_content,
+                 text="Mua ngay",
+                 font=self.fonts['button'],
+                 bg=self.colors['success'],
+                 fg=self.colors['white'],
+                 relief='flat',
+                 command=self.quick_buy,
+                 cursor='hand2').pack(side=tk.LEFT, padx=(0, 10))
+        
+        # Order check
+        order_frame = tk.Frame(quick_content, bg=self.colors['card'])
+        order_frame.pack(side=tk.RIGHT)
+        
+        tk.Label(order_frame,
+                text="Kiểm tra đơn hàng:",
+                font=self.fonts['button'],
+                fg=self.colors['text'],
+                bg=self.colors['card']).pack(side=tk.LEFT)
+        
+        self.order_entry = tk.Entry(order_frame,
+                                   font=('Consolas', 10),
+                                   bg=self.colors['background'],
+                                   fg=self.colors['text'],
+                                   insertbackground=self.colors['text'],
+                                   width=15)
+        self.order_entry.pack(side=tk.LEFT, padx=(10, 5))
+        self.order_entry.bind('<Return>', self.check_order)
+        
+        tk.Button(order_frame,
+                 text="Kiểm tra",
+                 font=self.fonts['button'],
+                 bg=self.colors['secondary'],
+                 fg=self.colors['white'],
+                 relief='flat',
+                 command=self.check_order,
+                 cursor='hand2').pack(side=tk.LEFT)
+        
+        # Main input
+        input_content = tk.Frame(input_frame, bg=self.colors['card'], relief=tk.SOLID, borderwidth=1)
+        input_content.pack(fill=tk.X)
+        
+        input_header = tk.Frame(input_content, bg=self.colors['card'])
+        input_header.pack(fill=tk.X, padx=15, pady=(10, 5))
+        
+        tk.Label(input_header,
+                text="Nhập tin nhắn của bạn:",
+                font=self.fonts['button'],
+                fg=self.colors['text'],
+                bg=self.colors['card']).pack(side=tk.LEFT)
+        
+        input_row = tk.Frame(input_content, bg=self.colors['card'])
+        input_row.pack(fill=tk.X, padx=15, pady=(0, 15))
+        
+        self.input_text = tk.Text(input_row,
+                                 height=3,
+                                 font=self.fonts['input'],
+                                 bg=self.colors['background'],
+                                 fg=self.colors['text'],
+                                 insertbackground=self.colors['text'],
+                                 wrap=tk.WORD,
+                                 selectbackground=self.colors['secondary'],
+                                 selectforeground=self.colors['white'])
+        self.input_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
+        
+        button_frame = tk.Frame(input_row, bg=self.colors['card'])
+        button_frame.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        self.send_button = tk.Button(button_frame,
+                                    text="Gửi",
+                                    font=self.fonts['button'],
+                                    bg=self.colors['secondary'],
+                                    fg=self.colors['white'],
+                                    relief='flat',
+                                    command=self.send_message,
+                                    cursor='hand2',
+                                    width=8, height=2)
+        self.send_button.pack()
+        
+        self.input_text.bind('<Return>', self.handle_enter)
+        self.input_text.bind('<Shift-Return>', lambda e: None)
+        self.input_text.bind('<KeyRelease>', self.on_typing)
+        self.input_text.bind('<FocusIn>', self.on_focus_in)
+        self.input_text.bind('<FocusOut>', self.on_focus_out)
+        
+        self.add_placeholder()
+
+    def create_status_bar(self):
+        status_frame = tk.Frame(self.main_frame, bg=self.colors['background'], height=30)
+        status_frame.pack(fill=tk.X, side=tk.BOTTOM)
+        status_frame.pack_propagate(False)
+        
+        self.status_label = tk.Label(status_frame,
+                                    text="Sẵn sàng",
+                                    font=('Segoe UI', 9),
+                                    bg=self.colors['background'],
+                                    fg=self.colors['text_light'],
+                                    anchor='w')
+        self.status_label.pack(side=tk.LEFT, padx=10, pady=5)
+
+    def add_placeholder(self):
+        # Only show placeholder if input is empty
+        if not self.input_text.get('1.0', tk.END).strip():
+            self.input_text.insert('1.0', 'Nhập tin nhắn của bạn...')
+            self.input_text.configure(fg=self.colors['text_light'])
+            self.input_placeholder_active = True
+
+    def on_focus_in(self, event):
+        if self.input_placeholder_active:
+            self.input_text.delete('1.0', tk.END)
+            self.input_text.configure(fg=self.colors['text'])
+            self.input_placeholder_active = False
+
+    def on_focus_out(self, event):
+        # Add placeholder if input is empty
+        if not self.input_text.get('1.0', tk.END).strip():
+            self.add_placeholder()
+
+    def handle_enter(self, event):
+        if not (event.state & 0x1):  # No Shift
+            self.send_message()
+            return 'break'
+        return None
+
+    def on_typing(self, event):
+        # If placeholder is active and user starts typing, remove it
+        if self.input_placeholder_active:
+            # Check if user is actually typing (not just navigating)
+            if event.keysym not in ['Left', 'Right', 'Up', 'Down', 'Home', 'End']:
+                self.input_text.delete('1.0', tk.END)
+                self.input_text.configure(fg=self.colors['text'])
+                self.input_placeholder_active = False
+            return
+        
+        if not self.typing_animation_active:
+            self.typing_animation_active = True
+            self.send_button.configure(bg=self.colors['success'])
+            self.status_label.configure(text="Đang soạn tin nhắn...")
+            self.root.after(3000, self.stop_typing_animation)
+
+    def stop_typing_animation(self):
+        self.send_button.configure(bg=self.colors['secondary'])
+        self.status_label.configure(text="Sẵn sàng | Nhấn Enter để gửi tin nhắn")
+        self.typing_animation_active = False
+
+    def add_welcome_message(self):
+        welcome = """Chào mừng bạn đến với BookStore!
+
+Tôi có thể giúp bạn:
+
+Tìm kiếm sách: Từ hàng triệu đầu sách
+Đặt mua sách: Quy trình đơn giản
+Theo dõi đơn hàng: Kiểm tra trạng thái
+Tư vấn sách: Gợi ý phù hợp
+
+Tính năng:
+• Tra cứu sách online
+• Mua nhanh theo mã sách
+• Kiểm tra đơn hàng nhanh chóng
+• Danh mục sách đầy đủ
+• Hỗ trợ đặt hàng từ A-Z
+
+Hãy bắt đầu bằng cách nhập câu hỏi!"""
+        
+        self.add_bot_message(welcome)
+
+    def add_user_message(self, message):
+        self.chat_display.unbind('<KeyPress>')
+        
+        timestamp = datetime.datetime.now().strftime("%H:%M")
+        self.chat_display.insert(tk.END, f"\nBạn ({timestamp})\n", "timestamp")
+        self.chat_display.insert(tk.END, f"{message}\n", "user")
+        
+        self.chat_display.bind('<KeyPress>', self.on_chat_keypress)
+        self.chat_display.see(tk.END)
+
+    def add_bot_message(self, message):
+        self.chat_display.unbind('<KeyPress>')
+        
+        timestamp = datetime.datetime.now().strftime("%H:%M")
+        self.chat_display.insert(tk.END, f"\nBookStore ({timestamp})\n", "timestamp")
+        self.chat_display.insert(tk.END, f"{message}\n", "bot")
+        
+        self.chat_display.bind('<KeyPress>', self.on_chat_keypress)
+        self.chat_display.see(tk.END)
+
+    def send_message(self, event=None):
+        user_input = self.input_text.get('1.0', tk.END).strip()
+        if user_input and not self.input_placeholder_active:
+            self.add_user_message(user_input)
+            self.input_text.delete('1.0', tk.END)
+            self.input_text.configure(fg=self.colors['text'])
+            self.input_placeholder_active = False
+            self.user_has_chatted = True  # Mark that user has started chatting
+            
+            # Don't add placeholder anymore after first chat
+            
+            self.status_label.configure(text="Đang xử lý...")
+            threading.Thread(target=self.process_message, args=(user_input,), daemon=True).start()
+
+    def process_message(self, user_input):
+        try:
+            response = self.chatbot.process_message(user_input)
+            self.message_queue.put(('bot', response))
+        except Exception as e:
+            self.message_queue.put(('bot', f"Xin lỗi, có lỗi xảy ra: {str(e)}"))
+
+    def process_queue(self):
+        try:
+            while True:
+                msg_type, message = self.message_queue.get_nowait()
+                if msg_type == 'bot':
+                    self.add_bot_message(message)
+                    self.status_label.configure(text="Sẵn sàng")
+        except queue.Empty:
+            pass
+        finally:
+            self.root.after(100, self.process_queue)
+
+    def quick_buy(self, event=None):
+        book_id = self.quick_entry.get().strip()
+        if book_id:
+            self.add_user_message(f"mua {book_id}")
+            self.quick_entry.delete(0, tk.END)
+            self.user_has_chatted = True  # Mark that user has started chatting
+            threading.Thread(target=self.process_message, args=(f"mua {book_id}",), daemon=True).start()
+
+    def check_order(self, event=None):
+        order_id = self.order_entry.get().strip()
+        if order_id:
+            self.add_user_message(f"kiểm tra đơn hàng {order_id}")
+            self.order_entry.delete(0, tk.END)
+            self.user_has_chatted = True  # Mark that user has started chatting
+            threading.Thread(target=self.process_message, args=(f"kiểm tra đơn hàng {order_id}",), daemon=True).start()
+
+    def show_catalog(self):
+        """Show catalog window"""
+        BookCatalogWindow(self.root, self.chatbot.bookstore)
+
+    def show_help(self):
+        """Show help window"""
+        help_window = tk.Toplevel(self.root)
+        help_window.title("Hướng dẫn sử dụng BookStore")
+        help_window.geometry("600x500")
+        help_window.configure(bg=self.colors['background'])
+        
+        # Header
+        header = tk.Frame(help_window, bg=self.colors['primary'], height=60)
+        header.pack(fill=tk.X)
+        header.pack_propagate(False)
+        
+        tk.Label(header,
+                text="HƯỚNG DẪN SỬ DỤNG BOOKSTORE",
+                font=('Segoe UI', 16, 'bold'),
+                bg=self.colors['primary'],
+                fg=self.colors['text']).pack(pady=15)
+        
+        # Content
+        content_frame = tk.Frame(help_window, bg=self.colors['card'])
+        content_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        
+        help_text = scrolledtext.ScrolledText(
+            content_frame,
+            wrap=tk.WORD,
+            font=('Segoe UI', 11),
+            bg=self.colors['card'],
+            fg=self.colors['text'],
+            state=tk.NORMAL
+        )
+        help_text.pack(fill=tk.BOTH, expand=True)
+        
+        help_content = """TÌM KIẾM SÁCH:
+• "tìm [từ khóa]" - Tìm theo tên, tác giả
+• "sách về [chủ đề]" - Tìm theo thể loại
+
+ĐẶT MUA SÁCH:
+• "mua [tên sách]" - Đặt mua bằng tên
+• "mua [ID sách]" - Đặt mua bằng mã sách
+• Dùng ô "Mua nhanh" ở trên
+
+KIỂM TRA ĐƠN HÀNG:
+• "kiểm tra đơn hàng [mã]" - Kiểm tra trạng thái
+• "đơn hàng [mã]" - Xem thông tin đơn hàng
+• Dùng ô "Kiểm tra đơn hàng" ở trên
+
+VÍ DỤ SỬ DỤNG:
+• "tìm sách lập trình Python"
+• "mua Đắc Nhân Tâm"
+• "kiểm tra đơn hàng ORD000001"
+
+HỖ TRỢ:
+• Hotline: 1900-xxxx (24/7)
+• Email: support@bookstore.com
+
+DANH MỤC SÁCH:
+• Click nút "Danh mục" để duyệt toàn bộ sách
+• Tìm kiếm theo thể loại
+• Copy mã sách dễ dàng"""
+        
+        help_text.insert('1.0', help_content)
+        help_text.configure(state=tk.DISABLED)
+        
+        # Close button
+        btn_frame = tk.Frame(help_window, bg=self.colors['background'])
+        btn_frame.pack(fill=tk.X, padx=20, pady=10)
+        
+        tk.Button(btn_frame,
+                 text="Đóng",
+                 font=('Segoe UI', 10, 'bold'),
+                 bg=self.colors['secondary'],
+                 fg=self.colors['white'],
+                 relief='flat',
+                 command=help_window.destroy,
+                 cursor='hand2',
+                 padx=20, pady=5).pack(side=tk.RIGHT)
+    
+    def clear_chat(self):
+        """Clear chat history"""
+        if messagebox.askyesno("Xác nhận", "Bạn có chắc muốn xóa toàn bộ lịch sử chat?"):
+            # Clear chat display
+            self.chat_display.unbind('<KeyPress>')
+            self.chat_display.delete('1.0', tk.END)
+            self.chat_display.bind('<KeyPress>', self.on_chat_keypress)
+            
+            # Clear input field first
+            self.input_text.delete('1.0', tk.END)
+            
+            # Reset all states
+            self.user_has_chatted = False
+            self.input_placeholder_active = False
+            
+            # Add placeholder back to input
+            self.add_placeholder()
+            
+            self.status_label.configure(text="Đã xóa lịch sử chat")
+
+    def run(self):
+        """Run the GUI application"""
+        try:
+            self.root.mainloop()
+        except Exception as e:
+            print(f"GUI Error: {e}")
+        finally:
+            try:
+                if hasattr(self, 'root'):
+                    self.root.quit()
+                    self.root.destroy()
+            except:
+                pass
